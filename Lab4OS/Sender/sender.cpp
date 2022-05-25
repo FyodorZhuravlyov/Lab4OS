@@ -1,0 +1,71 @@
+#include <iostream>
+#include<Windows.h>
+#include <fstream> 
+
+void sendMessage(std::ofstream& out, char message[20], char* filename) {
+	out.open(filename, std::ios::binary | std::ios::app);
+	out.write(message, MESSAGE_SIZE);
+	out.close();
+}
+
+int main(int argc, char** argv)
+{
+	const int MESSAGE_SIZE = 20;
+	char* filename = argv[1];
+	char* eventname = argv[2];
+	std::ofstream out(filename, std::ios::binary);
+	if (!out.is_open()) {
+		std::cout << "File is not open." << std::endl;
+		system("pause");
+		return -1;
+	}
+	out.close();
+
+	HANDLE ReadyEvent = OpenEvent(EVENT_MODIFY_STATE, FALSE, LPWSTR(eventname));
+	HANDLE StartAll = OpenEvent(SYNCHRONIZE, FALSE, L"START_ALL");
+	if (ReadyEvent == NULL || StartAll == NULL) {
+		printf("Open event failed.\n");
+		system("pause");
+		return GetLastError();
+	}
+	SetEvent(ReadyEvent);
+	printf("Ready.\n");
+	printf("Started.\n");
+	HANDLE fileMutex = OpenMutex(SYNCHRONIZE, FALSE, L"FILE_ACCESS");
+	if (NULL == fileMutex) {
+		printf("Opening mutex failed.");
+		system("pause");
+		return GetLastError();
+	}
+
+	//objects to control the count of written/read messages
+	HANDLE senderSemaphore = OpenSemaphore(SEMAPHORE_MODIFY_STATE, FALSE, L"MESSAGES_COUNT_SEM");
+	HANDLE mesReadEvent = OpenEvent(EVENT_ALL_ACCESS, FALSE, L"MESSAGE_READ");
+	if (NULL == senderSemaphore || NULL == mesReadEvent)
+		return GetLastError();
+	//request processing
+	WaitForSingleObject(StartAll, INFINITE);
+	printf("Enter message or enter CTRL+Z to exit.\n");
+	char message[MESSAGE_SIZE];
+	while (true) {
+		std::cout << ">";
+		std::cin.getline(message, MESSAGE_SIZE, '\n');
+		if (std::cin.eof())
+			break;
+		//sending a message
+		WaitForSingleObject(fileMutex, INFINITE);
+		out.open(filename, std::ios::binary | std::ios::app);
+		out.write(message, MESSAGE_SIZE);
+		ReleaseMutex(fileMutex);
+		//if message file is full, waits for reciever event
+		if (ReleaseSemaphore(senderSemaphore, 1, NULL) != TRUE) {
+			std::cout << "Message file is full. Waiting for receiver." << std::endl;
+			ResetEvent(mesReadEvent);
+			WaitForSingleObject(mesReadEvent, INFINITE);
+			ReleaseSemaphore(senderSemaphore, 1, NULL);
+		}
+		std::cout << "Message has been sent." << std::endl;
+		out.close();
+	}
+	return 0;
+}
