@@ -38,26 +38,20 @@ int main(int argc, char** argv)
 		return GetLastError();
 	}
 
-	//objects to control the count of written/read messages
 	HANDLE senderSemaphore = OpenSemaphore(SEMAPHORE_MODIFY_STATE, FALSE, L"MESSAGES_COUNT_SEM");
 	HANDLE mesReadEvent = OpenEvent(EVENT_ALL_ACCESS, FALSE, L"MESSAGE_READ");
 	if (NULL == senderSemaphore || NULL == mesReadEvent)
 		return GetLastError();
-	//request processing
 	WaitForSingleObject(StartAll, INFINITE);
-	printf("Enter message or enter CTRL+Z to exit.\n");
 	char message[MESSAGE_SIZE];
 	while (true) {
-		std::cout << ">";
 		std::cin.getline(message, MESSAGE_SIZE, '\n');
 		if (std::cin.eof())
 			break;
-		//sending a message
 		WaitForSingleObject(fileMutex, INFINITE);
 		out.open(filename, std::ios::binary | std::ios::app);
 		out.write(message, MESSAGE_SIZE);
 		ReleaseMutex(fileMutex);
-		//if message file is full, waits for reciever event
 		if (ReleaseSemaphore(senderSemaphore, 1, NULL) != TRUE) {
 			std::cout << "Message file is full. Waiting for receiver." << std::endl;
 			ResetEvent(mesReadEvent);

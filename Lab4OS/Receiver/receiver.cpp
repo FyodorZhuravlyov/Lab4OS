@@ -91,7 +91,6 @@ int main() {
 	char tmp[MESSAGE_SIZE];
 	char message[MESSAGE_SIZE];
 	while (true) {
-		std::cout << ">";
 		std::cin >> tmp;
 		if (std::cin.eof())
 			break;
